@@ -31,7 +31,8 @@
 
 struct PersistentState
 {
-  float TempOffset = 0.0f;
+  float Temp1Offset = 0.0f;
+  float Temp2Offset = 0.0f;
   float HumOffset = 0.0f;
   float PressureOffset = 0.0f;
 };
@@ -54,14 +55,13 @@ Adafruit_BMP280 bmp; // I2C
 
 DHT dht(GPIO_DTH11_IN, DHTTYPE);
 
-float Temp = 0;
+float Temp1 = 0, Temp2 = 0;
 float Hum = 0;
 
 float Pressure = 0;
 
 
 int WiFi_reconnect = 0;
-bool notify = false;
 
 
 long lastSensorRead = 0;
@@ -141,19 +141,16 @@ String getOutputStates()
   myArray["cards"][5]["c_text"] = " to reboot click ok";
 
   // sensors
-  myArray["cards"][6]["c_text"] = String(Temp);
-  myArray["cards"][7]["c_text"] = String(Hum);
-  myArray["cards"][8]["c_text"] = "43"; //String(CO2);
-  myArray["cards"][9]["c_text"] = "44"; //String(pm25.avgPM25);
-  myArray["cards"][10]["c_text"] = String(Pressure);
+  myArray["cards"][6]["c_text"] = String(Temp1);
+  myArray["cards"][7]["c_text"] = String(Temp2);
+  myArray["cards"][8]["c_text"] = String(Hum);
+  myArray["cards"][9]["c_text"] = String(Pressure);
 
   // configuration
-  myArray["cards"][11]["c_text"] = String(g_state.TempOffset);
+  myArray["cards"][10]["c_text"] = String(g_state.Temp1Offset);
+  myArray["cards"][11]["c_text"] = String(g_state.Temp2Offset);
   myArray["cards"][12]["c_text"] = String(g_state.HumOffset);
   myArray["cards"][13]["c_text"] = String(g_state.PressureOffset);
-
-  // notify
-  myArray["cards"][14]["c_text"] = String(notify);
 
   String jsonString = JSON.stringify(myArray);
   return jsonString;
@@ -203,9 +200,19 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         return;
       }
       bool updated = false;
-      if (json["data"].hasOwnProperty("TempOffset"))
+      if (json["data"].hasOwnProperty("Temp1Offset"))
       {
-        g_state.TempOffset = (double)json["data"]["TempOffset"];
+        g_state.Temp1Offset = (double)json["data"]["Temp1Offset"];
+        updated = true;
+      }
+      if (json["data"].hasOwnProperty("Temp2Offset"))
+      {
+        g_state.Temp2Offset = (double)json["data"]["Temp2Offset"];
+        updated = true;
+      }
+      if (json["data"].hasOwnProperty("PressureOffset"))
+      {
+        g_state.PressureOffset = (double)json["data"]["PressureOffset"];
         updated = true;
       }
       if (json["data"].hasOwnProperty("HumOffset"))
@@ -302,26 +309,6 @@ void reconnect_mqtt()
 void MQTT_callback(String topic, String message)
 {
   LOG_PRINTF("Message arrived on topic: %s; Data: %s\n", topic.c_str(), message.c_str());
-  
-  String notifyTopic = Hostname + "/CMD/Notify";
-  String strTopic = String(topic);
-
-  if (strTopic == notifyTopic)
-  {
-    if (message == "true")
-    {
-      notify = true;
-      digitalWrite(GPIO_LED_NOTIFY, HIGH);
-    }
-    else if (message == "false")
-    {
-      notify = false;
-      digitalWrite(GPIO_LED_NOTIFY, LOW);
-    }
-    Mqtt_refresh = true;
-  }
-
-  notifyClients(getOutputStates());
 }
 
 // initialize MQTT
@@ -331,7 +318,7 @@ void initMQTT() {
   LOG_PRINTF("setup MQTT\n");
   
   client.begin(myClient);
-  client.setHost(MQTT_BROKER, 1883);
+  client.setHost(CREDENTIALS_MQTT_BROKER, 1883);
   client.onMessage(MQTT_callback);
   client.setWill(willTopic.c_str(), "Offline", true, 0);
 }
@@ -346,8 +333,11 @@ void MQTTsend()
   mqtt_data["Time"] = My_time;
   mqtt_data["RSSI"] = WiFi.RSSI();
 
-  if(Temp > 0) {
-    sensors["Temp"] = Temp;
+  if(Temp1 > 0) {
+    sensors["Temp1"] = Temp1;
+  }
+  if(Temp2 > 0) {
+    sensors["Temp2"] = Temp2;
   }
   if(Hum > 0) {
     sensors["Hum"] = Hum;
@@ -356,16 +346,8 @@ void MQTTsend()
   {
     sensors["Pressure"] = Pressure;
   }
-  /*
-  sensors["PM25"] = pm25.avgPM25;
-  if(CO2 > 0) {
-    sensors["CO2"] = CO2;
-  }
-  */
-  actuators["Notify"] = notify;
 
   mqtt_data["Sensors"] = sensors;
-  mqtt_data["Actuators"] = actuators;
 
   String mqtt_string = JSON.stringify(mqtt_data);
 
@@ -382,9 +364,6 @@ void setup()
   LOG_INIT();
 
   delay(4000); // wait for serial log to be reday
-
-  pinMode(GPIO_LED_NOTIFY, OUTPUT);
-  digitalWrite(GPIO_LED_NOTIFY, LOW);
 
   LOG_PRINTLN("start init\n");
   initLittleFS();
@@ -476,40 +455,17 @@ void loop()
     lastSensorRead = now;
     Mqtt_refresh = true;
 
-
-    float tempRaw, humRaw;
-    
-  // must call this to wake sensor up and get new measurement data
-  // it blocks until measurement is complete
-  if (bmp.takeForcedMeasurement()) {
-    // can now print out the new measurements
-    Serial.print(F("Temperature = "));
-    Serial.print(bmp.readTemperature());
-    Serial.println(" *C");
-
-    Serial.print(F("Pressure = "));
-    Serial.print(bmp.readPressure());
-    Serial.println(" Pa");
-
-    Serial.print(F("Approx altitude = "));
-    Serial.print(bmp.readAltitude(1013.25)); /* Adjusted to local forecast! */
-    Serial.println(" m");
-
-    Serial.println();
-    delay(2000);
-  } else {
-    Serial.println("Forced measurement failed!");
-  }
-
- // Read temperature as Celsius (the default)
+    // Read temperature as Celsius (the default)
     float newT = dht.readTemperature();
     // if temperature read failed, don't change t value
     if (isnan(newT)) {
       Serial.println("Failed to read from DHT sensor!");
     }
     else {
-      Temp = newT;
-      Serial.println(Temp);
+      Temp1 = newT + g_state.Temp1Offset;
+      LOG_PRINT("Temp1 *C = ");
+      LOG_PRINT(Temp1);
+      LOG_PRINT("\t\t");
     }
     // Read Humidity
     float newH = dht.readHumidity();
@@ -518,30 +474,28 @@ void loop()
       Serial.println("Failed to read from DHT sensor!");
     }
     else {
-      Hum = newH;
-      Serial.println(Hum);
-    }
-    
-    if (!isnan(Temp))
-    { // check if 'is not a number'
-      LOG_PRINT("Temp *C = ");
-      LOG_PRINT(Temp);
-      LOG_PRINT("\t\t");
-    }
-    else
-    {
-      LOG_PRINTLN("Failed to read temperature");
-    }
-
-    if (!isnan(Hum))
-    { // check if 'is not a number'
+      Hum = newH + g_state.HumOffset;
       LOG_PRINT("Hum. % = ");
       LOG_PRINTLN(Hum);
     }
-    else
-    {
-      LOG_PRINTLN("Failed to read humidity");
-    }
+
+      // must call this to wake sensor up and get new measurement data
+      // it blocks until measurement is complete
+      if (bmp.takeForcedMeasurement()) {
+        // can now print out the new measurements
+        Temp2 = bmp.readTemperature() + g_state.Temp2Offset;
+        Pressure = (bmp.readPressure()/100) + g_state.PressureOffset;
+
+        Serial.print(F("Temp2 *C = "));
+        Serial.print(Temp2);
+        Serial.print("\t\t");
+
+        Serial.print(F("Pressure hPa = "));
+        Serial.print(Pressure);
+        Serial.println("");
+      } else {
+        Serial.println("BMP Forced measurement failed!");
+      }
   }
 
   // check WiFi

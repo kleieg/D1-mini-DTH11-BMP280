@@ -1,7 +1,6 @@
 // set hostname used for MQTT tag and WiFi
-#define HOSTNAME "D1-mini"
-#define MQTT_BROKER "192.168.178.15"
-#define VERSION "v 0.9.0"
+#define HOSTNAME "esp-heizung"
+#define VERSION "v 1.0.0"
 
 #define RECONNECT_INTERVAL 5000
 #define PUBLISH_DELAY 5000
@@ -13,8 +12,5 @@
 //#define GPIO_IC2_SCA D2
 
 #define GPIO_DTH11_IN D3
-
-
-#define GPIO_LED_NOTIFY D7
 
 #define GPIO_LED_INTERN D4

@@ -1,6 +1,6 @@
 // set hostname used for MQTT tag and WiFi
 #define HOSTNAME "esp-heizung"
-#define VERSION "v 1.0.0"
+#define VERSION "v 1.0.1"
 
 #define RECONNECT_INTERVAL 5000
 #define PUBLISH_DELAY 5000

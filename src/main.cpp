@@ -11,9 +11,6 @@
 #include <WiFiUdp.h>
 #include <MQTT.h>
 
-#include <SoftwareSerial.h>
-
-
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
@@ -459,7 +456,7 @@ void loop()
     float newT = dht.readTemperature();
     // if temperature read failed, don't change t value
     if (isnan(newT)) {
-      Serial.println("Failed to read from DHT sensor!");
+      LOG_PRINTLN("Failed to read from DHT sensor!");
     }
     else {
       Temp1 = newT + g_state.Temp1Offset;
@@ -471,7 +468,7 @@ void loop()
     float newH = dht.readHumidity();
     // if humidity read failed, don't change h value 
     if (isnan(newH)) {
-      Serial.println("Failed to read from DHT sensor!");
+      LOG_PRINTLN("Failed to read from DHT sensor!");
     }
     else {
       Hum = newH + g_state.HumOffset;
@@ -486,15 +483,15 @@ void loop()
         Temp2 = bmp.readTemperature() + g_state.Temp2Offset;
         Pressure = (bmp.readPressure()/100) + g_state.PressureOffset;
 
-        Serial.print(F("Temp2 *C = "));
-        Serial.print(Temp2);
-        Serial.print("\t\t");
+        LOG_PRINT(F("Temp2 *C = "));
+        LOG_PRINT(Temp2);
+        LOG_PRINT("\t\t");
 
-        Serial.print(F("Pressure hPa = "));
-        Serial.print(Pressure);
-        Serial.println("");
+        LOG_PRINT(F("Pressure hPa = "));
+        LOG_PRINT(Pressure);
+        LOG_PRINTLN("");
       } else {
-        Serial.println("BMP Forced measurement failed!");
+        LOG_PRINTLN("BMP Forced measurement failed!");
       }
   }
 

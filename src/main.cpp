@@ -14,8 +14,8 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
+#include <Adafruit_SHT4x.h>
 #include <Adafruit_Sensor.h>
-#include <DHT.h>
 
 
 #include "Settings.h"
@@ -47,10 +47,7 @@ String Hostname;
 #define BMP_CS   (10)
 
 Adafruit_BMP280 bmp; // I2C
-
-#define DHTTYPE    DHT11     // DHT 11
-
-DHT dht(GPIO_DTH11_IN, DHTTYPE);
+Adafruit_SHT4x sht4 = Adafruit_SHT4x(); // I2C
 
 float Temp1 = 0, Temp2 = 0;
 float Hum = 0;
@@ -386,9 +383,11 @@ void setup()
                   Adafruit_BMP280::FILTER_X16,      /* Filtering. */
                   Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
 
-  LOG_PRINTLN("DTH11 init.");
-  dht.begin();
-  
+  LOG_PRINTLN("SHT41 init.");
+  sht4.begin();
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sht4.setHeater(SHT4X_NO_HEATER);
+
   LOG_PRINTLN("sensor initialized");
 
   // Route for root / web page
@@ -452,29 +451,19 @@ void loop()
     lastSensorRead = now;
     Mqtt_refresh = true;
 
-    // Read temperature as Celsius (the default)
-    float newT = dht.readTemperature();
-    // if temperature read failed, don't change t value
-    if (isnan(newT)) {
-      LOG_PRINTLN("Failed to read from DHT sensor!");
-    }
-    else {
-      Temp1 = newT + g_state.Temp1Offset;
+    sensors_event_t humidity, temp;
+  
+    uint32_t timestamp = millis();
+    sht4.getEvent(&humidity, &temp);
+
+    Temp1 = temp.temperature + g_state.Temp1Offset;
+    Hum = humidity.relative_humidity + g_state.HumOffset;
+
       LOG_PRINT("Temp1 *C = ");
       LOG_PRINT(Temp1);
       LOG_PRINT("\t\t");
-    }
-    // Read Humidity
-    float newH = dht.readHumidity();
-    // if humidity read failed, don't change h value 
-    if (isnan(newH)) {
-      LOG_PRINTLN("Failed to read from DHT sensor!");
-    }
-    else {
-      Hum = newH + g_state.HumOffset;
       LOG_PRINT("Hum. % = ");
       LOG_PRINTLN(Hum);
-    }
 
       // must call this to wake sensor up and get new measurement data
       // it blocks until measurement is complete
